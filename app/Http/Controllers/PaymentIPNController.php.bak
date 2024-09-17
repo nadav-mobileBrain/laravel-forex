@@ -1,0 +1,53 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\BasicSetting;
+use App\Models\TransactionLog;
+use App\Models\User;
+use App\TraitsFolder\CommonTrait;
+
+class PaymentIPNController extends Controller
+{
+
+    use CommonTrait;
+
+    /**
+     * @param $data
+     * @param $user
+     */
+    public function referralAmount($data, $user)
+    {
+        $basic = BasicSetting::first();
+        if ($basic->referral_commission_status) {
+            if (User::whereId($user->parent_id)->exists()) {
+                $refUser = User::findOrFail($user->parent_id);
+                $amo = round((($data->amount * $basic->referral_commission_percentage) / 100), 2);
+                $refUser->balance += $amo;
+                $refUser->save();
+                $this->transactionLog($data->order_number, $refUser->id, 7, $amo, $user->username . " - Reference Bonus");
+            } else {
+                $user->parent_id = 0;
+                $user->save();
+            }
+        }
+    }
+
+    /**
+     * @param $custom
+     * @param $id
+     * @param $type
+     * @param $amount
+     * @param $details
+     */
+    public function transactionLog($custom, $id, $type, $amount, $details)
+    {
+        $tr['custom'] = $custom;
+        $tr['user_id'] = $id;
+        $tr['type'] = $type;
+        $tr['balance'] = $amount;
+        $tr['post_balance'] = 0;
+        $tr['details'] = $details;
+        TransactionLog::create($tr);
+    }
+}
